@@ -1,13 +1,13 @@
-# Compiled files
+# Java build artifacts
 *.class
-
-# OS files
-.DS_Store
+out/
+target/
+bin/
 
 # IDE
 .idea/
 .vscode/
+*.iml
 
-# Logs
-*.log
-
+# Local dependency jars (do not commit)
+libs/
