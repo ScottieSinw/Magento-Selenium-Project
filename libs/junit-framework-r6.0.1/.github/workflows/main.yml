@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'releases/**'
+    tags-ignore:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+concurrency:
+  # Cancels in-progress runs only for pull requests
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions: {}
+
+env:
+  DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+
+jobs:
+  Linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        fetch-depth: 1
+        persist-credentials: false
+    - name: Install GraalVM
+      uses: graalvm/setup-graalvm@2a2412009026a83f51d179f92dc2b3fd4c8142df # v1.4.1
+      with:
+        distribution: graalvm-community
+        version: 'latest'
+        java-version: '21'
+    - name: Build
+      uses: ./.github/actions/main-build
+      with:
+        encryptionKey: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+        arguments: |
+          :platform-tooling-support-tests:test \
+          build \
+          jacocoRootReport \
+          --no-configuration-cache # Disable configuration cache due to https://github.com/diffplug/spotless/issues/2318
+    - name: Upload to Codecov.io
+      uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+  Windows:
+    runs-on: windows-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        fetch-depth: 1
+        persist-credentials: false
+    - name: Build
+      uses: ./.github/actions/main-build
+      with:
+        encryptionKey: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+  macOS:
+    runs-on: macos-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        fetch-depth: 1
+        persist-credentials: false
+    - name: Build
+      uses: ./.github/actions/main-build
+      with:
+        encryptionKey: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+  publish_artifacts:
+    name: Publish Snapshot Artifacts
+    needs: macOS
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write # required for build provenance attestation
+      id-token: write # required for build provenance attestation
+    if: github.event_name == 'push' && github.repository == 'junit-team/junit-framework' && (startsWith(github.ref, 'refs/heads/releases/') || github.ref == 'refs/heads/main')
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        fetch-depth: 1
+        persist-credentials: false
+    - name: Publish
+      uses: ./.github/actions/run-gradle
+      env:
+        ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+        ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+      with:
+        encryptionKey: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+        arguments: |
+          publishAllPublicationsToMavenCentralSnapshotsRepository -x check \
+          prepareGitHubAttestation
+    - name: Generate build provenance attestations
+      uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+      with:
+        subject-path: documentation/build/attestation/*.jar
+
+  documentation:
+    name: Build Documentation
+    concurrency:
+      group: github-pages-${{ github.ref }}
+      cancel-in-progress: true
+    needs: macOS
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        fetch-depth: 1
+        persist-credentials: false
+    - name: Install Graphviz
+      run: |
+        sudo apt-get update
+        sudo apt-get install graphviz
+    - name: Build Documentation
+      uses: ./.github/actions/run-gradle
+      with:
+        encryptionKey: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+        arguments: |
+          prepareDocsForUploadToGhPages \
+          -Dscan.tag.Documentation
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config --global user.name "JUnit Team"
+        git config --global user.email "team@junit.org"
+    - name: Upload Documentation
+      if: github.event_name == 'push' && github.repository == 'junit-team/junit-framework' && github.ref == 'refs/heads/main'
+      uses: ./.github/actions/run-gradle
+      with:
+        encryptionKey: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+        arguments: |
+          gitPublishPush \
+          -Dscan.tag.Documentation
+      env:
+        GIT_USERNAME: git
+        GIT_PASSWORD: ${{ secrets.JUNIT_BUILDS_GITHUB_TOKEN_DOCS_REPO }}

@@ -1,0 +1,33 @@
+name: Run Gradle
+description: Sets up Gradle JDKs and runs Gradle
+inputs:
+  arguments:
+    required: true
+    description: Gradle arguments
+    default: build
+  encryptionKey:
+    required: true
+    description: Gradle cache encryption key
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+      id: setup-gradle-jdk
+      with:
+        distribution: temurin
+        java-version: 25
+        check-latest: true
+    - uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
+      with:
+        cache-encryption-key: ${{ inputs.encryptionKey }}
+    - shell: bash
+      env:
+        JAVA_HOME: ${{ steps.setup-gradle-jdk.outputs.path }}
+      run: | # zizmor: ignore[template-injection]
+        ./gradlew \
+        -Porg.gradle.java.installations.auto-download=false \
+        -Pjunit.develocity.predictiveTestSelection.enabled=true \
+        -Pjunit.develocity.predictiveTestSelection.selectRemainingTests=${{ github.event_name != 'pull_request' }} \
+        "-Dscan.value.GitHub job=${{ github.job }}" \
+        javaToolchains \
+        ${{ inputs.arguments }}

@@ -1,0 +1,30 @@
+name: Add label to opened issues
+on:
+  issues:
+    types:
+      - opened
+permissions: {}
+jobs:
+  label_issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const issue = await github.rest.issues.get({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const originalLabels = issue.data.labels.map(l => l.name);
+            const statusLabels = originalLabels.filter(l => l.startsWith("status: "));
+            if (statusLabels.length === 0 && !originalLabels.includes("up-for-grabs")) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ["status: new"]
+              })
+            }

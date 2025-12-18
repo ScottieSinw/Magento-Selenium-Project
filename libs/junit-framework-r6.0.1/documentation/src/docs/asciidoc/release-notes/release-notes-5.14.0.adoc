@@ -1,0 +1,17 @@
+[[release-notes-5.14.0]]
+== 5.14.0
+
+*Date of Release:* September 30, 2025
+
+*Scope:*
+
+* Bug fixes and enhancements since 5.13.x
+* Deprecations along with new APIs to ease migration to JUnit 6
+
+For a complete list of all _closed_ issues and pull requests for this release, consult the
+link:{junit-framework-repo}+/milestone/108?closed=1+[5.14.0-RC1] and
+link:{junit-framework-repo}+/milestone/109?closed=1+[5.14.0] milestone pages in the JUnit
+repository on GitHub.
+
+For complete details consult the
+https://docs.junit.org/5.14.0/release-notes/[5.14.0 Release Notes] online.
